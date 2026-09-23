@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import DocumentList from './components/DocumentList';
 import UploadComponent from './components/UploadComponent';
 import { listDocuments } from './services/api';
@@ -8,26 +8,43 @@ export default function App() {
   const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const requestVersion = useRef(0);
 
-  async function refreshDocuments() {
+  async function refreshDocuments(signal) {
+    const currentVersion = requestVersion.current + 1;
+    requestVersion.current = currentVersion;
     setIsLoading(true);
     setError('');
 
     try {
-      setDocuments(await listDocuments());
+      const nextDocuments = await listDocuments({ signal });
+      if (currentVersion === requestVersion.current) {
+        setDocuments(nextDocuments);
+      }
     } catch (loadError) {
-      setError(loadError.message);
+      if (!signal?.aborted && currentVersion === requestVersion.current) {
+        setError(loadError.message);
+      }
     } finally {
-      setIsLoading(false);
+      if (currentVersion === requestVersion.current) {
+        setIsLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    refreshDocuments();
+    const controller = new AbortController();
+    refreshDocuments(controller.signal);
+    return () => controller.abort();
   }, []);
 
   function handleUploaded(document) {
-    setDocuments((currentDocuments) => [document, ...currentDocuments]);
+    requestVersion.current += 1;
+    setError('');
+    setDocuments((currentDocuments) => [
+      document,
+      ...currentDocuments.filter((currentDocument) => currentDocument.id !== document.id),
+    ]);
   }
 
   return (

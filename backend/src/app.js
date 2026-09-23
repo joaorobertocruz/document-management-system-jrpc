@@ -11,10 +11,18 @@
 // usando multer com diskStorage. Não utilize provedores externos.
 
 const express = require('express');
-const documentRoutes = require('./routes/documentRoutes');
+const createDocumentRouter = require('./routes/documentRoutes');
+const { upload, isPathInsideStorage, removeFile } = require('./repositories/fileRepository');
+const DocumentRepository = require('./repositories/documentRepository');
+const DocumentService = require('./services/documentService');
+const DocumentController = require('./controllers/documentController');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const documentRepository = new DocumentRepository();
+const documentService = new DocumentService(documentRepository, { isPathInsideStorage, removeFile });
+const documentController = new DocumentController(documentService);
+const documentRoutes = createDocumentRouter({ upload, documentController });
 
 app.use(express.json());
 app.use(documentRoutes);
@@ -25,9 +33,31 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.use((error, _request, response, _next) => {
+app.use((_request, response) => {
+  response.status(404).json({
+    error: 'Rota não encontrada.',
+    code: 'ROUTE_NOT_FOUND',
+  });
+});
+
+app.use((error, _request, response, next) => {
+  if (response.headersSent) {
+    return next(error);
+  }
+
   const statusCode = error.statusCode || 500;
-  const code = error.code || 'INTERNAL_ERROR';
+  const publicErrorCodes = new Set([
+    'DOCUMENT_NOT_FOUND',
+    'FILE_NOT_FOUND',
+    'FILE_REQUIRED',
+    'FILE_TOO_LARGE',
+    'EMPTY_FILE',
+    'INVALID_UPLOAD',
+    'DOWNLOAD_ERROR',
+    'STORAGE_ERROR',
+    'ROUTE_NOT_FOUND',
+  ]);
+  const code = publicErrorCodes.has(error.code) ? error.code : 'INTERNAL_ERROR';
   const message = statusCode >= 500 ? 'Erro interno do servidor.' : error.message;
 
   response.status(statusCode).json({
