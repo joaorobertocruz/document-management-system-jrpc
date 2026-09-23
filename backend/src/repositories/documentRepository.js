@@ -4,16 +4,18 @@ class DocumentRepository {
   }
 
   save(document) {
-    this.documents.set(document.id, document);
-    return document;
+    const storedDocument = { ...document };
+    this.documents.set(storedDocument.id, storedDocument);
+    return { ...storedDocument };
   }
 
   findAll() {
-    return Array.from(this.documents.values()).map(({ filePath, ...document }) => document);
+    return Array.from(this.documents.values()).map((document) => ({ ...document }));
   }
 
   findById(id) {
-    return this.documents.get(id);
+    const document = this.documents.get(id);
+    return document ? { ...document } : undefined;
   }
 }
 

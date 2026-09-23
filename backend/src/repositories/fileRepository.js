@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const multer = require('multer');
 
 const storageDirectory = path.resolve(__dirname, '../../storage');
@@ -11,7 +12,7 @@ const storage = multer.diskStorage({
     callback(null, storageDirectory);
   },
   filename: (_request, _file, callback) => {
-    callback(null, `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    callback(null, randomUUID());
   },
 });
 
@@ -24,6 +25,27 @@ const upload = multer({
   },
 });
 
+function isPathInsideStorage(filePath) {
+  const relativePath = path.relative(storageDirectory, path.resolve(filePath));
+  return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+}
+
+function removeFile(filePath) {
+  if (!isPathInsideStorage(filePath)) {
+    return;
+  }
+
+  try {
+    fs.unlinkSync(filePath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+}
+
 module.exports = {
   upload,
+  isPathInsideStorage,
+  removeFile,
 };
